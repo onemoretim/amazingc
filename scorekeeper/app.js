@@ -227,6 +227,7 @@ function renderGameView(game, readOnly) {
   const roundsHTML = roundsTableHTML(game, readOnly);
 
   const imgBtn = `<button class="btn ghost" id="shareImg">🖼 生成成绩图片</button>`;
+  const delBtn = `<button class="btn danger" id="delGame" style="margin-top:10px">删除本局</button>`;
   let actions = '';
   if (!readOnly) {
     actions = `
@@ -236,9 +237,10 @@ function renderGameView(game, readOnly) {
       <div class="row" style="margin-top:10px">
         <button class="btn ghost" id="editSetup">编辑设置</button>
         <button class="btn accent" id="finishGame">结束对局</button>
-      </div>`;
+      </div>
+      ${delBtn}`;
   } else {
-    actions = `<div class="divider"></div>${imgBtn}<div class="muted" style="text-align:center;margin-top:8px">本局已结束（只读）</div>`;
+    actions = `<div class="divider"></div>${imgBtn}<div class="muted" style="text-align:center;margin:8px 0">本局已结束（只读）</div>${delBtn}`;
   }
 
   app.innerHTML = `
@@ -279,6 +281,17 @@ function renderGameView(game, readOnly) {
 
   const sb = $('#shareImg');
   if (sb) sb.addEventListener('click', () => shareGameImage(game));
+
+  const db = $('#delGame');
+  if (db) db.addEventListener('click', () => {
+    confirmModal('删除本局', `确定删除对局「${game.name || '未命名对局'}」？此操作不可撤销。`, [
+      { label: '取消', cls: 'ghost', onClick: closeModal },
+      { label: '删除', cls: 'danger', onClick: () => {
+          GAMES = GAMES.filter((g) => g.id !== game.id);
+          saveGames(GAMES); closeModal(); showToast('已删除'); renderHome();
+        } }
+    ]);
+  });
 }
 
 /* 轮次得分表格：行=轮次，列=各玩家；含初始行与总分行，便于核对 */
@@ -320,8 +333,8 @@ function roundsTableHTML(game, readOnly) {
     const teamB = [r.seats[1], r.seats[3]].filter(Boolean).map(nameOf);
     const aWin = r.winner === 'A';
     const info =
-      `<span class="${aWin ? 'rt-win' : 'rt-lose'}">${aWin ? '✓ ' : ''}A ${teamA.join('、')}</span><br>` +
-      `<span class="${!aWin ? 'rt-win' : 'rt-lose'}">${!aWin ? '✓ ' : ''}B ${teamB.join('、')}</span><br>` +
+      `<span class="${aWin ? 'rt-win' : 'rt-lose'}">${aWin ? '✓ ' : ''}${escapeHTML(teamA.join('、'))}</span><br>` +
+      `<span class="${!aWin ? 'rt-win' : 'rt-lose'}">${!aWin ? '✓ ' : ''}${escapeHTML(teamB.join('、'))}</span><br>` +
       `<span class="rt-tier">${['一', '二', '三'][r.tier]}档 ${val}</span>`;
     const act = readOnly ? '' : `<td class="rt-act">
       <button class="rt-btn edit" data-act="edit" data-idx="${idx}">改</button>
@@ -357,6 +370,16 @@ function openRoundForm(game, idx) {
   drawRoundForm(game);
 }
 
+// 某队当前座上玩家名（用于胜方按钮，随座位调整实时刷新）
+function winNames(game, team) {
+  const idxs = team === 'A' ? [0, 2] : [1, 3];
+  const names = idxs
+    .map((i) => roundForm.seats[i])
+    .filter(Boolean)
+    .map((pid) => (game.players.find((p) => p.id === pid) || {}).name || '?');
+  return names.length ? names.join('、') : '未选人';
+}
+
 function drawRoundForm(game) {
   const seatHTML = roundForm.seats.map((pid, i) => {
     const name = pid ? (game.players.find((p) => p.id === pid) || {}).name || '?' : '点击选人';
@@ -385,8 +408,12 @@ function drawRoundForm(game) {
     <div class="tier-group">${tierBtns}</div>
     <div class="section-title">选择胜方</div>
     <div class="win-group">
-      <div class="win-btn A ${roundForm.winner === 'A' ? 'active' : ''}" data-win="A">A 队胜</div>
-      <div class="win-btn B ${roundForm.winner === 'B' ? 'active' : ''}" data-win="B">B 队胜</div>
+      <div class="win-btn A ${roundForm.winner === 'A' ? 'active' : ''}" data-win="A">
+        <div class="wl">A 队胜</div><div class="wn">${escapeHTML(winNames(game, 'A'))}</div>
+      </div>
+      <div class="win-btn B ${roundForm.winner === 'B' ? 'active' : ''}" data-win="B">
+        <div class="wl">B 队胜</div><div class="wn">${escapeHTML(winNames(game, 'B'))}</div>
+      </div>
     </div>
     <div class="muted tiny" id="formHint">需选满 4 个座位、档位与胜方。</div>
   `;

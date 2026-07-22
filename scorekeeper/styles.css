@@ -93,17 +93,22 @@ input:focus { outline: 2px solid var(--primary); }
 .badge.live { background: rgba(46,196,182,.18); color: var(--win); }
 .badge.done { background: rgba(147,164,177,.18); color: var(--muted); }
 
-/* 计分看板 */
-.scoreboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* 计分看板（紧凑） */
+.scoreboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .score-chip {
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px;
-  padding: 12px; text-align: center;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 6px; text-align: center;
 }
-.score-chip .name { font-weight: 700; font-size: 15px; }
-.score-chip .val { font-size: 26px; font-weight: 800; margin-top: 4px; }
+.score-chip .name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.score-chip .val { font-size: 18px; font-weight: 800; margin-top: 2px; }
+.score-chip .tiny { margin-top: 1px; }
 .val.pos { color: var(--win); }
 .val.neg { color: var(--lose); }
 .val.zero { color: var(--muted); }
+
+@media (max-width: 360px) {
+  .scoreboard { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* 牌桌座位 */
 .table-seats {
@@ -143,10 +148,13 @@ input:focus { outline: 2px solid var(--primary); }
 .tier-btn.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,209,102,.4); }
 
 .win-group { display: flex; gap: 8px; margin: 10px 0; }
-.win-btn { flex: 1; padding: 12px; border-radius: 12px; border: 1px solid var(--line);
-  background: var(--surface-2); color: var(--muted); font-weight: 700; cursor: pointer; }
+.win-btn { flex: 1; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--muted); cursor: pointer; text-align: center; }
+.win-btn .wl { font-weight: 700; font-size: 15px; }
+.win-btn .wn { font-size: 12px; color: var(--muted); margin-top: 2px; word-break: break-all; }
 .win-btn.A.active { border-color: var(--win); color: var(--win); box-shadow: 0 0 0 2px rgba(46,196,182,.4); }
 .win-btn.B.active { border-color: var(--lose); color: var(--lose); box-shadow: 0 0 0 2px rgba(239,71,111,.4); }
+.win-btn.A.active .wn, .win-btn.B.active .wn { color: inherit; opacity: .85; }
 
 /* 轮次列表 */
 .round-item {
