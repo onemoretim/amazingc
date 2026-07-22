@@ -210,7 +210,10 @@ table.rt thead th.rt-rnd { z-index: 3; }
 .rt-neg { color: var(--lose); font-weight: 700; }
 .rt-zero { color: var(--text); }
 .rt-na { color: var(--muted); opacity: .5; }
-.rt-info { color: var(--muted); font-size: 12px; }
+.rt-info { color: var(--muted); font-size: 12px; white-space: normal; min-width: 124px; text-align: left; line-height: 1.5; }
+.rt-win { color: var(--accent); font-weight: 700; }
+.rt-lose { color: var(--muted); }
+.rt-tier { color: var(--muted); font-size: 11px; }
 tr.rt-sub td { background: rgba(255,255,255,.02); color: var(--muted); }
 tr.rt-total td {
   background: var(--surface-2); font-size: 16px; border-top: 2px solid var(--line);

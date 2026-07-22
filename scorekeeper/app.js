@@ -65,6 +65,10 @@ function renderHome() {
   const done = GAMES.filter((g) => g.finished).sort((a, b) => b.createdAt - a.createdAt);
 
   let html = `<button class="btn primary" id="newGame">＋ 新建对局</button>`;
+  html += `<div class="row" style="margin-bottom:14px">
+    <button class="btn ghost sm" id="exportAll">⬇ 导出全部</button>
+    <button class="btn ghost sm" id="importAll">⬆ 导入</button>
+  </div>`;
   html += `<div class="section-title">进行中（${live.length}）</div>`;
   html += live.length
     ? live.map(gameCardHTML).join('')
@@ -76,6 +80,8 @@ function renderHome() {
 
   app.innerHTML = html;
   $('#newGame').addEventListener('click', renderSetup);
+  $('#exportAll').addEventListener('click', exportAll);
+  $('#importAll').addEventListener('click', importAll);
   $$('.game-card').forEach((c) =>
     c.addEventListener('click', () => openGame(c.dataset.id))
   );
@@ -220,17 +226,19 @@ function renderGameView(game, readOnly) {
 
   const roundsHTML = roundsTableHTML(game, readOnly);
 
+  const imgBtn = `<button class="btn ghost" id="shareImg">🖼 生成成绩图片</button>`;
   let actions = '';
   if (!readOnly) {
     actions = `
       <div class="divider"></div>
+      ${imgBtn}
       <button class="btn primary" id="addRound">＋ 记一轮</button>
       <div class="row" style="margin-top:10px">
         <button class="btn ghost" id="editSetup">编辑设置</button>
         <button class="btn accent" id="finishGame">结束对局</button>
       </div>`;
   } else {
-    actions = `<div class="divider"></div><div class="muted" style="text-align:center">本局已结束（只读）</div>`;
+    actions = `<div class="divider"></div>${imgBtn}<div class="muted" style="text-align:center;margin-top:8px">本局已结束（只读）</div>`;
   }
 
   app.innerHTML = `
@@ -268,6 +276,9 @@ function renderGameView(game, readOnly) {
       })
     );
   }
+
+  const sb = $('#shareImg');
+  if (sb) sb.addEventListener('click', () => shareGameImage(game));
 }
 
 /* 轮次得分表格：行=轮次，列=各玩家；含初始行与总分行，便于核对 */
@@ -304,7 +315,14 @@ function roundsTableHTML(game, readOnly) {
     const cells = players.map((p) =>
       (p.id in byPid) ? cellVal(byPid[p.id]) : `<td class="rt-na">–</td>`
     ).join('');
-    const info = `${r.winner}胜·${['一', '二', '三'][r.tier]}(${val})`;
+    const nameOf = (pid) => (game.players.find((p) => p.id === pid) || {}).name || '?';
+    const teamA = [r.seats[0], r.seats[2]].filter(Boolean).map(nameOf);
+    const teamB = [r.seats[1], r.seats[3]].filter(Boolean).map(nameOf);
+    const aWin = r.winner === 'A';
+    const info =
+      `<span class="${aWin ? 'rt-win' : 'rt-lose'}">${aWin ? '✓ ' : ''}A ${teamA.join('、')}</span><br>` +
+      `<span class="${!aWin ? 'rt-win' : 'rt-lose'}">${!aWin ? '✓ ' : ''}B ${teamB.join('、')}</span><br>` +
+      `<span class="rt-tier">${['一', '二', '三'][r.tier]}档 ${val}</span>`;
     const act = readOnly ? '' : `<td class="rt-act">
       <button class="rt-btn edit" data-act="edit" data-idx="${idx}">改</button>
       <button class="rt-btn del" data-act="del" data-idx="${idx}">删</button></td>`;
@@ -526,27 +544,254 @@ function applySetupEdit(game, tiersLocked) {
 }
 
 /* ============================================================
- * 分享（占位，后续接入微信等）
+ * 分享 / 导出导入 / 成绩图片
  * ============================================================ */
-function onShare() {
-  const g = findGame(curGameId);
-  if (!g) return;
+function buildShareText(g) {
   const scores = computeScores(g);
   const lines = [...g.players]
     .sort((a, b) => scores[b.id] - scores[a.id])
     .map((p, i) => `${i + 1}. ${p.name} ${scores[p.id] > 0 ? '+' : ''}${scores[p.id]}`)
     .join('\n');
-  const text = `【${g.name}】\n${lines}\n—— 记分牌`;
+  return `【${g.name}】\n${lines}\n—— 记分牌`;
+}
+
+function onShare() {
+  const g = findGame(curGameId);
+  if (!g) return;
+  const text = buildShareText(g);
   if (navigator.share) {
     navigator.share({ title: g.name, text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showToast('成绩已复制，可粘贴分享')).catch(() => showToast(text));
   } else {
-    // 回退：复制到剪贴板
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => showToast('成绩已复制，可粘贴分享')).catch(() => showToast(text));
-    } else {
-      showToast('当前环境不支持分享，结果：' + text);
-    }
+    showToast('当前环境不支持分享，结果：' + text);
   }
+}
+
+function onShareText(game) {
+  const text = buildShareText(game);
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showToast('成绩已复制')).catch(() => showToast(text));
+  } else {
+    showToast(text);
+  }
+}
+
+/* 生成成绩图片（canvas），可分享或保存 */
+function shareGameImage(game) {
+  showToast('正在生成图片…');
+  const canvas = buildScoreImage(game);
+  const dataURL = canvas.toDataURL('image/png');
+  canvas.toBlob((blob) => {
+    const file = blob ? new File([blob], `${(game.name || 'score')}.png`, { type: 'image/png' }) : null;
+    const canShare = file && navigator.canShare && navigator.canShare({ files: [file] });
+    const body = `<div style="text-align:center"><img src="${dataURL}" style="width:100%;border-radius:12px;border:1px solid var(--line)" alt="成绩" /></div>`;
+    const foot = [];
+    if (canShare) {
+      foot.push({ label: '分享', cls: 'primary', onClick: async () => {
+        try { await navigator.share({ title: game.name, files: [file] }); closeModal(); }
+        catch (e) { /* 用户取消，留在预览 */ }
+      }});
+    }
+    foot.push({
+      label: canShare ? '保存图片' : '保存图片',
+      cls: canShare ? 'ghost' : 'primary',
+      onClick: () => {
+        const a = document.createElement('a');
+        a.href = dataURL; a.download = `${(game.name || 'score')}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast('已保存，可去相册查看');
+      }
+    });
+    foot.push({ label: '复制文字', cls: 'ghost', onClick: () => { onShareText(game); closeModal(); } });
+    openModal('成绩图片', body, foot);
+  }, 'image/png');
+}
+
+function buildScoreImage(game) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = 720, pad = 28;
+  const scores = computeScores(game);
+  const ordered = [...game.players].sort((a, b) => scores[b.id] - scores[a.id]);
+  const players = game.players;
+  const nameOf = (pid) => (game.players.find((p) => p.id === pid) || {}).name || '?';
+
+  const lineH = 36, headH = 96, standingsGap = 24;
+  const standingsH = ordered.length * lineH;
+  const tableTop = 44, colH = 34;
+  const hasInit = players.some((p) => p.initial);
+  const tableRows = game.rounds.length + 1 + (hasInit ? 1 : 0);
+  const tableH = colH * tableRows;
+  const H = headH + standingsH + standingsGap + tableTop + tableH + pad;
+
+  const fit = (c, text, maxW) => {
+    if (c.measureText(text).width <= maxW) return text;
+    let s = text;
+    while (s.length && c.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+    return s + '…';
+  };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#12181d'; ctx.fillRect(0, 0, W, H);
+
+  // 标题 + 元信息
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd166'; ctx.font = '700 28px sans-serif';
+  ctx.fillText(fit(ctx, game.name || '未命名对局', W - 2 * pad), pad, 34);
+  ctx.fillStyle = '#93a4b1'; ctx.font = '14px sans-serif';
+  const dateStr = new Date(game.createdAt).toLocaleString('zh-CN');
+  ctx.fillText(`${dateStr} · ${players.length}人 · ${game.rounds.length}轮 · ${game.finished ? '已结束' : '进行中'}`, pad, 66);
+
+  // 最终排名
+  let y = headH;
+  ctx.fillStyle = '#93a4b1'; ctx.font = '600 16px sans-serif';
+  ctx.fillText('最终排名', pad, y);
+  y += 24;
+  ordered.forEach((p, i) => {
+    const v = scores[p.id] || 0;
+    ctx.fillStyle = i === 0 ? '#ffd166' : '#e7eef3'; ctx.font = '700 17px sans-serif';
+    ctx.fillText(`${i + 1}. ${p.name}`, pad, y + lineH / 2);
+    ctx.fillStyle = v > 0 ? '#2ec4b6' : v < 0 ? '#ef476f' : '#93a4b1';
+    ctx.font = '700 19px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(`${v > 0 ? '+' : ''}${v}`, W - pad, y + lineH / 2);
+    ctx.textAlign = 'left';
+    y += lineH;
+  });
+
+  // 轮次明细表
+  y += standingsGap;
+  ctx.fillStyle = '#93a4b1'; ctx.font = '600 16px sans-serif';
+  ctx.fillText('轮次明细', pad, y);
+  y += 24;
+  const top = y;
+  const labelW = 44, tierW = 104;
+  const left = pad + labelW;
+  const colW = (W - 2 * pad - labelW - tierW) / players.length;
+  const tableW = W - 2 * pad;
+
+  ctx.fillStyle = '#1f2933';
+  ctx.fillRect(pad, top, tableW, colH * tableRows);
+
+  let ry = top;
+  const cell = (x, w, text, color, font, align = 'center', maxW = null) => {
+    ctx.fillStyle = color; ctx.font = font; ctx.textAlign = align;
+    const t = maxW ? fit(ctx, text, maxW) : text;
+    const tx = align === 'left' ? x + 6 : x + w / 2;
+    ctx.fillText(t, tx, ry + colH / 2);
+  };
+
+  // 表头
+  ctx.fillStyle = '#27343f'; ctx.fillRect(pad, ry, tableW, colH);
+  cell(pad, labelW, '轮', '#93a4b1', '700 13px sans-serif');
+  players.forEach((p, i) => cell(left + i * colW, colW, p.name, '#e7eef3', '600 13px sans-serif', 'center', colW - 8));
+  cell(left + players.length * colW, tierW, '档/胜', '#93a4b1', '600 13px sans-serif');
+  ry += colH;
+
+  // 初始行
+  if (hasInit) {
+    cell(pad, labelW, '初', '#93a4b1', '700 13px sans-serif');
+    players.forEach((p, i) => cell(left + i * colW, colW, `${p.initial || 0}`, '#93a4b1', '600 13px sans-serif'));
+    cell(left + players.length * colW, tierW, '', '#93a4b1', '600 13px sans-serif');
+    ry += colH;
+  }
+
+  // 每轮
+  game.rounds.forEach((r, idx) => {
+    const v = game.tiers[r.tier] || 0;
+    const byPid = {};
+    r.seats.forEach((pid, i) => { if (pid) byPid[pid] = teamOf(i) === r.winner ? v : -v; });
+    cell(pad, labelW, `${idx + 1}`, '#93a4b1', '700 13px sans-serif');
+    players.forEach((p) => {
+      const d = p.id in byPid ? byPid[p.id] : null;
+      const color = d === null ? '#5a6b78' : d > 0 ? '#2ec4b6' : d < 0 ? '#ef476f' : '#e7eef3';
+      const txt = d === null ? '–' : `${d > 0 ? '+' : ''}${d}`;
+      cell(left + players.indexOf(p) * colW, colW, txt, color, '700 14px sans-serif');
+    });
+    const teamA = [r.seats[0], r.seats[2]].filter(Boolean).map(nameOf).join('、');
+    const teamB = [r.seats[1], r.seats[3]].filter(Boolean).map(nameOf).join('、');
+    const info = `${r.winner}胜 ${teamA}/ ${teamB} ${['一', '二', '三'][r.tier]}(${v})`;
+    cell(left + players.length * colW, tierW, info, '#93a4b1', '11px sans-serif', 'left', tierW - 8);
+    ry += colH;
+  });
+
+  // 总分行
+  ctx.fillStyle = '#27343f'; ctx.fillRect(pad, ry, tableW, colH);
+  cell(pad, labelW, '总', '#ffd166', '700 14px sans-serif');
+  players.forEach((p, i) => {
+    const s = scores[p.id] || 0;
+    const color = s > 0 ? '#2ec4b6' : s < 0 ? '#ef476f' : '#e7eef3';
+    cell(left + i * colW, colW, `${s > 0 ? '+' : ''}${s}`, color, '700 15px sans-serif');
+  });
+  cell(left + players.length * colW, tierW, '', '#93a4b1', '600 13px sans-serif');
+  ry += colH;
+
+  // 网格线
+  ctx.strokeStyle = '#34434f'; ctx.lineWidth = 1;
+  for (let r = 0; r <= tableRows; r++) {
+    const yy = top + r * colH + 0.5;
+    ctx.beginPath(); ctx.moveTo(pad, yy); ctx.lineTo(pad + tableW, yy); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(pad + labelW + 0.5, top); ctx.lineTo(pad + labelW + 0.5, top + colH * tableRows); ctx.stroke();
+  for (let i = 1; i <= players.length; i++) {
+    const xx = left + i * colW + 0.5;
+    ctx.beginPath(); ctx.moveTo(xx, top); ctx.lineTo(xx, top + colH * tableRows); ctx.stroke();
+  }
+  // 总分行顶部分隔加粗
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2;
+  const yyTop = top + colH * (tableRows - 1) + 0.5;
+  ctx.beginPath(); ctx.moveTo(pad, yyTop); ctx.lineTo(pad + tableW, yyTop); ctx.stroke();
+
+  return canvas;
+}
+
+/* 导出全部对局为 JSON 文件（备份 / 换手机迁移） */
+function exportAll() {
+  const data = { app: 'scorekeeper', version: 1, exportedAt: Date.now(), games: GAMES };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  a.href = url; a.download = `scorekeeper-backup-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('已导出全部对局');
+}
+
+/* 从 JSON 文件导入（相同ID覆盖，其余合并） */
+function importAll() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.addEventListener('change', () => {
+    const f = inp.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const games = Array.isArray(data) ? data : data.games;
+        if (!Array.isArray(games)) throw new Error('文件格式不正确');
+        confirmModal('导入对局', `将导入 ${games.length} 个对局（相同ID会覆盖，其余合并）。确定？`, [
+          { label: '取消', cls: 'ghost', onClick: closeModal },
+          { label: '导入', cls: 'primary', onClick: () => {
+              const map = new Map(GAMES.map((g) => [g.id, g]));
+              games.forEach((g) => { if (g && g.id) map.set(g.id, g); });
+              GAMES = [...map.values()];
+              saveGames(GAMES); closeModal(); renderHome(); showToast('导入完成');
+            } }
+        ]);
+      } catch (e) {
+        showToast('导入失败：' + e.message);
+      }
+    };
+    reader.readAsText(f);
+  });
+  inp.click();
 }
 
 /* ============================================================
