@@ -82,9 +82,45 @@ function renderHome() {
   $('#newGame').addEventListener('click', renderSetup);
   $('#exportAll').addEventListener('click', exportAll);
   $('#importAll').addEventListener('click', importAll);
-  $$('.game-card').forEach((c) =>
-    c.addEventListener('click', () => openGame(c.dataset.id))
-  );
+  $$('.game-card').forEach((c) => {
+    const id = c.dataset.id;
+    // 长按删除（移动端友好）
+    let pressTimer = null, longFired = false;
+    const startPress = () => {
+      longFired = false;
+      pressTimer = setTimeout(() => { longFired = true; confirmDeleteGame(id); }, 600);
+    };
+    const cancelPress = () => { clearTimeout(pressTimer); };
+    c.addEventListener('touchstart', startPress, { passive: true });
+    c.addEventListener('touchend', cancelPress);
+    c.addEventListener('touchmove', cancelPress);
+    c.addEventListener('mousedown', startPress);
+    c.addEventListener('mouseup', cancelPress);
+    c.addEventListener('mouseleave', cancelPress);
+
+    c.addEventListener('click', (e) => {
+      if (e.target.closest('.gc-del')) return; // 删除图标单独处理
+      if (longFired) { longFired = false; return; } // 长按已触发删除，不再打开
+      openGame(id);
+    });
+    c.querySelector('.gc-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      confirmDeleteGame(id);
+    });
+  });
+}
+
+// 删除单个对局（首页 / 详情页共用）
+function confirmDeleteGame(id) {
+  const g = findGame(id);
+  if (!g) return;
+  confirmModal('删除本局', `确定删除对局「${g.name || '未命名对局'}」？此操作不可撤销。`, [
+    { label: '取消', cls: 'ghost', onClick: closeModal },
+    { label: '删除', cls: 'danger', onClick: () => {
+        GAMES = GAMES.filter((x) => x.id !== id);
+        saveGames(GAMES); closeModal(); showToast('已删除'); renderHome();
+      } }
+  ]);
 }
 
 function gameCardHTML(g) {
@@ -96,6 +132,7 @@ function gameCardHTML(g) {
       <div class="gc-sub">${sub}</div>
     </div>
     <span class="badge ${g.finished ? 'done' : 'live'}">${g.finished ? '已结束' : '进行中'}</span>
+    <button class="gc-del" data-del="${g.id}" aria-label="删除">🗑</button>
   </div>`;
 }
 
@@ -283,15 +320,7 @@ function renderGameView(game, readOnly) {
   if (sb) sb.addEventListener('click', () => shareGameImage(game));
 
   const db = $('#delGame');
-  if (db) db.addEventListener('click', () => {
-    confirmModal('删除本局', `确定删除对局「${game.name || '未命名对局'}」？此操作不可撤销。`, [
-      { label: '取消', cls: 'ghost', onClick: closeModal },
-      { label: '删除', cls: 'danger', onClick: () => {
-          GAMES = GAMES.filter((g) => g.id !== game.id);
-          saveGames(GAMES); closeModal(); showToast('已删除'); renderHome();
-        } }
-    ]);
-  });
+  if (db) db.addEventListener('click', () => confirmDeleteGame(game.id));
 }
 
 /* 轮次得分表格：行=轮次，列=各玩家；含初始行与总分行，便于核对 */

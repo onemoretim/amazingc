@@ -92,6 +92,12 @@ input:focus { outline: 2px solid var(--primary); }
 .badge { font-size: 12px; padding: 3px 8px; border-radius: 999px; }
 .badge.live { background: rgba(46,196,182,.18); color: var(--win); }
 .badge.done { background: rgba(147,164,177,.18); color: var(--muted); }
+.gc-del {
+  flex: 0 0 36px; width: 36px; height: 36px; border: none; border-radius: 10px;
+  background: var(--surface-2); color: var(--lose); font-size: 18px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.gc-del:active { transform: scale(.9); }
 
 /* 计分看板（紧凑） */
 .scoreboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
