@@ -1,0 +1,19 @@
+{
+  "name": "记分牌",
+  "short_name": "计分",
+  "description": "棋牌四人两副牌 2v2 对门记分工具",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12181d",
+  "theme_color": "#1f2933",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
