@@ -1,5 +1,5 @@
 // Service Worker：离线缓存，使 PWA 可安装、可离线使用
-const CACHE = 'sk-v5';
+const CACHE = 'sk-v6';
 const ASSETS = [
   './',
   './index.html',

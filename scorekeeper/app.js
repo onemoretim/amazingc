@@ -153,7 +153,7 @@ function renderSetup() {
   setupState = {
     name: '',
     players: [newPlayer(), newPlayer(), newPlayer(), newPlayer()],
-    tiers: [30, 60, 100]
+    tiers: [10, 20, 30]
   };
   drawSetup();
 }
@@ -192,7 +192,7 @@ function drawSetup() {
     <div class="card">
       <div class="section-title">三档倍率（开局设定后不再修改）</div>
       <div class="row">${tiers}</div>
-      <div class="tiny muted" style="margin-top:6px">每档分值可任意设置，例如 30 / 60 / 100</div>
+      <div class="tiny muted" style="margin-top:6px">每档分值可任意设置，例如 10 / 20 / 30</div>
     </div>
 
     <button class="btn primary" id="startGame">开始对局</button>
